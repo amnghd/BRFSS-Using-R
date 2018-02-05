@@ -1,0 +1,272 @@
+---
+title: "Exploring the BRFSS data"
+output:
+  html_document:
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+  pdf_document: default
+---
+
+## Setup
+
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+#install.packages("ggplot2")
+#install.packages("dplyr")
+#install.packages('scales')  # only have to run once
+#install.packages('plyr')    # only have to run once
+
+library(plyr)
+library(ggplot2)
+library(dplyr)
+library(scales)
+
+```
+
+
+### Load data
+
+Make sure your data and R Markdown files are in the same directory. When loaded
+your data file will be called `brfss2013`. Delete this note when before you submit 
+your work. 
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+"BRFSS conducts both landline telephone- and cellular telephone-based surveys. In conducting the BRFSS landline telephone survey, interviewers collect data from a randomly selected adult in a household. In conducting the cellular telephone version of the BRFSS questionnaire, interviewers collect data from an adult who participates by using a cellular telephone and resides in a private residence or college housing.
+Health characteristics estimated from the BRFSS pertain to the non-institutionalized adult population, aged 18 years or older, who reside in the US."
+
+
+**Population**
+To be included in this data set, you need to have a phone, you need to reside in US, you need to be willing to answer to long questionaire over phone, you need to be above 18, you need to be able to understand English, reside in a private/college housing, you need to reside in US, and finally you need to recall all your behaviour and also be honest in the answer.
+
+**Causality/Generalizability**
+Therefore, the test does not hold randomized sampling, and clearly does not hold random assignment either. As a result, the test is not generlizable to the whole population, and doesnt also demonstrate any causality.
+
+The result can demonstrate CORRRELATION for the POPULATION that is above 18, has phone (convenience bias), has the will to answer the phone (volunteer bias, non-response bias), reside in the US (convenience bias), understands English (convenience bias), resides in the housing (convenience bias), and has acceptable memory capability and honesty.
+
+
+* * *
+
+## Part 2: Research questions
+1- Does physical activity and obesity related? 
+
+This is interesing question to see how much you can improve your cardiaic health by including excersize in your daily activity.
+
+2- Does salary correspond with feeling hopeless?
+
+It is interesing to see if you feel more hopeful if you make more money. It is important to differentiate between "making money" and "having money".
+
+3- Does drinking behaviour correlate with the smoking behaviour?
+
+It is good to see if there is any correlation. Intuitively, there should be an increasing trend between drinking behaviour and smoking behaviour. We can learn if we are educating society on both drinking and smoking habits on the same level.
+
+## Part 3: Exploratory data analysis
+
+NOTE: Insert code chunks as needed by clicking on the "Insert a new code chunk" 
+button (green button with orange arrow) above. Make sure that your code is visible
+in the project you submit. Delete this note when before you submit your work.
+
+**Research quesion 1:**
+
+1- First question is a simple warm up one, does physical activity and obesity related? For this question, we choose BMI as the response variable (target, dependant variable) and the minutes of excersize as the explanatory variable (independandt variable, feature). We save the required data for question 1 inside $q_1$ data frame.
+
+
+```{r}
+q1<-select(brfss2013, X_rfbmi5,actin11_)
+str(q1)
+q1<-(na.omit(q1))
+
+```
+Data is already in factor (numerical) data type, so there is no need to mutate a new variable. Lets take a look at a contingency table of the activity vs. obesity. 
+```{r}
+colnames(q1) <- c("Activity_Type", "Obese")
+table(q1)
+```
+```{r}
+bartable =(table(q1))
+barplot(prop.table(bartable, 2) * 100, col=c("orange","black"), legend = levels(unique(q1$Activity_Type)))  ## stacked 100%
+
+```
+
+We can see in this figure that people who excercise moderately have much lower obesity level. Interestingly, people who have no activity and people with vigurous activity demonstrate similar obesity level. There could be two explanations, first, people who are not fit, tend to have vigorous physical activity to reach their goals faster. Moreover, it is possible that people who have vigorous activity tend to let go of their excersize much faster.
+
+One last step to assure that there exist a correlation, is to check if the differences are statistically significant. For this purpose, we can use chi-squre test.
+
+```{r}
+chisq.test(bartable) 
+```
+Beautiful!! Out observation indeed is statistically signigicant. There exist a CORRELATION between activity and obesity. Interestingly, vigorous activity doesnt seem to be positively correlating to fitness.
+
+
+
+**Research quesion 2:**
+
+2- Does salary correspond with feeling hopeless?
+For this topic we will take three columns from the data, income categories, number of times felt hopelss, and sex.
+Not all the data is provided for the feeling of hopeless. However, there still are more than 30K observation, which is a valuable data set to consider. We will mutate a new column named, hopeful, which is equal to True if the person doesnt feel hopeless for the hole month.
+
+
+
+```{r}
+q2<-select(brfss2013,sex ,mishopls,income2)
+q2<-(na.omit(q2))
+q2<-q2%>%mutate(happy=q2$mishopls=='None')
+str(q2)
+
+```
+Let's make an EDA based on income level.
+```{r}
+q2%>%select(sex, income2, happy)%>%group_by(income2, sex)%>%summarise(mean_happiness=mean(happy), count=n())
+
+```
+
+Interestingly we can see a trend, where people feel less happy (more hopeless) when their income is lower. Moreover, we see that women in general have higher level of feeling of hopelessness. Let's dig more into this.
+
+Now let's do VEDA (visualized EDA) on the data:
+```{r}
+colfunc <- colorRampPalette(c("black", "orange"))
+barplot(prop.table(table(select(q2, mishopls, income2)), 2) * 100,legend = levels(unique(q2$mishopls)),col=colfunc(5))
+```
+
+
+
+
+This is amazing result, and at the same time sad. People who are financially marginalized tend to more lethargic and hopeless. It is interesting to see if this is the case for general population or rather men whose role is mostly correlated with bread provider tend to feel more hopeless in the time of financial deficit?
+
+```{r}
+q2_male<-q2%>%filter(q2$sex=='Male')
+q2_female<-q2%>%filter(q2$sex=='Female')
+
+colfunc <- colorRampPalette(c("black", "orange"))
+barplot(prop.table(table(select(q2_male, mishopls, income2)), 2) * 100,legend = levels(unique(q2_male$mishopls)),col=colfunc(5))
+title(main = "Men emotional reaction to poverty", font.main = 4)
+
+colfunc <- colorRampPalette(c("black", "orange"))
+barplot(prop.table(table(select(q2_female, mishopls, income2)), 2) * 100,legend = levels(unique(q2_female$mishopls)),col=colfunc(5))
+title(main = "Women emotional reaction to poverty", font.main = 4)
+
+```
+
+Interesting!! Looking at the graphs, you can see that women actually react to feeling of poverty more strongly. And this is the case for all of the income brackets.One way of interprettig these result could be the fact that women in general are more capable of expressing their feelings.
+
+**Research quesion 3:**
+
+3- Does smoking and drinking behaviour correlate?
+
+```{r}
+
+q3<-brfss2013%>%select(drocdy3_, usenow3)
+q3<-(na.omit(q3))
+colnames(q3) <- c("Alcohol_daily",  "Smoke_frequency")
+q3%>%group_by(Smoke_frequency)%>%summarise(mean_alc_usage=mean(Alcohol_daily), median_alc_usage=median(Alcohol_daily), count=n())
+
+```
+There is certainly a trend between the alcohol consumption of people who drink regularly and smoking behavior. The outliers, however, have significant impact on the interpretation of data. In general, there is a large difference (relatively) between three classes in terms of median, but not the same way in terms of mean. This is the results of large level of outliers who have high drinking patterns. This might cloud our interpretation. However, one thing we might conclude is that people who tend to be healthy (non-smokers) tend to drinkk much less than other classes, however, they have comparable mean. This might be the result of the fact that there is less awareness on the effect of drinking, and even people who are healthy have outliers with similar behaviours to careless smokers.
+
+Let's take a look out outiliers and their behaviours in a boxplot.
+
+
+```{r}
+ggplot(q3, aes(x=Smoke_frequency, y=Alcohol_daily, fill=Smoke_frequency)) + geom_boxplot()+ stat_summary(fun.y=mean, geom="point", shape=5, size=4)
+```
+
+
+**Research quesion 4:**
+
+4- Do sleeping and general sense of well being correlate?
+
+```{r}
+q4<-na.omit(brfss2013%>%select(sex, genhlth, sleptim1))
+q4<-q4%>%mutate(healthy=(q4$genhlth=='Excellent')|(q4$genhlth=='Very good'))
+q4%>%group_by(sleptim1, sex)%>%summarise(mean_health=mean(healthy), count=n())
+
+barplot(prop.table(table(select(q4, genhlth, sleptim1)), 2) * 100, ,legend = levels(unique(q4$genhlth)),col=colfunc(5))
+title(main = "How sleep correlates with general health", font.main = 4)
+
+
+```
+Before going into too much details, first let's see how most of people sleep. Let's consider middle $65 \%$ , $95\%$ of the population.  It seems most of people sleep between $4$ to $10$ hours, and assuming a normal distribution (just an assumption), people within one standard deviation sleep between $6$ to $8$ hours. Therefore, in the following results, we focus our attention on people who sleep between $4$ to $10$ hours.
+
+
+```{r}
+q4$sleptim1%>%quantile(probs = c(0.175,0.825))
+
+q4$sleptim1%>%quantile(probs = c(0.025,0.975))
+```
+
+
+Apparently, general feeling of health is highly correlated with how you sleep. It is best to sleep between 7 to 9 hours and  7 hours shows best level of health. It might be interesting to see how each one of these sleep times (7,8,9) correlates with the income. Maybe people who sleep 7 hours make more money and work more.
+
+```{r}
+q4_add<-na.omit(brfss2013%>%select(income2,sleptim1))
+barplot(prop.table(table(q4_add), 2) * 100, ,legend = levels(unique(q4_add$income2)),col=colfunc(8))
+title(main = "How sleep correlates with income", font.main = 4)
+
+```
+Very interesting. Maybe sleep is picking up a bit of income feature. In other words, people who make more money, generally sleep around 7 hours, and that is a possible reason why they are more healthy in general. It is also nice to see if hours of work out correlates with how much you sleep.
+
+```{r}
+q4_add2<-na.omit(brfss2013%>%select(X_pa150r2,sleptim1))
+barplot(prop.table(table(q4_add2), 2) * 100, ,legend = levels(unique(q4_add2$X_pa150r2)),col=colfunc(3))
+title(main = "How sleep correlates with minutes of physical activity", font.main = 4)
+
+
+```
+Interestingly, another nice variable that correlates with sleep quality, is the amount ofworkout. People who sleep around 7 hours, tend to work out more often.
+Finally, let's see if a non-intuitive parameter correlates with the sleep quality: education.
+
+```{r}
+q4_add3<-na.omit(brfss2013%>%select(educa,sleptim1))
+
+
+barplot(prop.table(table(q4_add3), 2) * 100, ,legend = levels(unique(q4_add3$educa)),col=colfunc(6))
+title(main = "How sleep correlates with the level of education", font.main = 4)
+
+
+```
+
+Intereestingly, people who are well eduacated, again, sleep around 7 hours. Therefore, it seems that sleep time itself is a dependant factor on a healthy life/work style. Therefore, a healthy life style is a confounding parameter on both sleep and happiness. 
+
+**Research quesion 5:**
+5- How general feeling of happiness is correlated with the work hours?
+```{r}
+q5<-na.omit(brfss2013%>%select(genhlth, scntwrk1))
+
+
+q5<-q5%>% mutate(q5$scntwrk1%>%cut(4))
+colnames(q5) <- c("Health",  "Work Hours", "Work_Intensity")
+
+barplot(prop.table(table(q5%>%select(Health, Work_Intensity)), 2) * 100, ,legend = levels(unique(q5$Health)),col=colfunc(5))
+title(main = "How Health correlates with the work intensity", font.main = 4)
+
+```
+This results seem to be counterintuitive. People who work very hard (50 or more) tend to be happy. It is also in opposit to [this study](https://www.usatoday.com/story/news/nation/2017/02/10/heres-what-scientists-say-perfect-work-week/97739498/).
+
+
+One reason could be a sampling bias. Looking at the data, only $6.6 \%$ of all participants answered to how much they work. This brings a possibility of volunteer bias. Maybe people who tend to be proud of their works answer this question more fervantly. 
+
+
+### **Final Thoughts**
+
+Before summarizing the results, note that since there is no randomized sampling/assignment. Therefore, the results for all three questions are not generalizable nor it demonstrate any causality.
+
+
+Observation 1: People who excersize moderaltely, tend to be more healthy (lower BMI) than people who don't work out or do excessive excersize.
+
+Observation 2: People tend to feel lethargic (hopeless) when their financial situation doesn't look good. Women tend to be impacted more in this matter.
+
+Observation 3: People who smoke less, tend to drink less in general. However, less education on drinking behaviour resulted in large population of outliers who are healthy on smoking side, and unhealthy on drinking side.
+
+**Observation 4: People who sleep well (around 7 hours) tend to have better health in general. It was shown that these people tend to be more educated, richer, and more active.**
+
+Observation 5: There seems to be a counterintuitive relationship between hours of work and health which also doenst comply with the researchs. One reason could be the fact that more than $93 \%$ of the participant did not answer the question regarding the hours of work. That is why we need to do a furhter study to understand why this is the case. 
